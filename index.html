@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Demo: Get started with the Isochrone API</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Mapbox GL JS -->
+    <script src="https://api.tiles.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
+    <link
+      href="https://api.tiles.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css"
+      rel="stylesheet"
+    />
+    <!-- Mapbox Assembly -->
+    <link
+      href="https://api.mapbox.com/mapbox-assembly/v1.3.0/assembly.min.css"
+      rel="stylesheet"
+    />
+    <script src="https://api.mapbox.com/mapbox-assembly/v1.3.0/assembly.js"></script>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+      }
+
+      #map {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 100%;
+      }
+
+      .label {
+        font-size: 12px;
+        color: black;
+        background-color: transparent;
+        padding: 2px;
+        white-space: nowrap;
+      }
+
+      #reset-button {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        z-index: 1;
+        background-color: #fff;
+        border: 1px solid #ccc;
+        padding: 8px 16px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="map"></div>
+    <button id="reset-button">Reset to Initial Position</button>
+
+    <div class="absolute fl my24 mx24 py24 px24 bg-gray-faint round">
+      <form id="params">
+        <h4 class="txt-m txt-bold mb6">Choose a travel mode:</h4>
+        <div class="mb12 mr12 toggle-group align-center">
+          <label class="toggle-container">
+            <input name="profile" type="radio" value="driving" checked />
+            <div class="toggle toggle--active-null toggle--null">Driving</div>
+          </label>
+          <label class="toggle-container">
+            <input name="profile" type="radio" value="walking" />
+            <div class="toggle toggle--active-null toggle--null">Walking</div>
+          </label>
+          <label class="toggle-container">
+            <input name="profile" type="radio" value="cycling" />
+            <div class="toggle toggle--active-null toggle--null">Cycling</div>
+          </label>
+        </div>
+        <h4 class="txt-m txt-bold mb6">Choose a maximum duration:</h4>
+        <div class="mb12 mr12 toggle-group align-center">
+          <label class="toggle-container">
+            <input name="duration" type="radio" value="30" checked />
+            <div class="toggle toggle--active-null toggle--null">30 min</div>
+          </label>
+          <label class="toggle-container">
+            <input name="duration" type="radio" value="40" />
+            <div class="toggle toggle--active-null toggle--null">40 min</div>
+          </label>
+          <label class="toggle-container">
+            <input name="duration" type="radio" value="50" />
+            <div class="toggle toggle--active-null toggle--null">50 min</div>
+          </label>
+          <label class="toggle-container">
+            <input name="duration" type="radio" value="60" />
+            <div class="toggle toggle--active-null toggle--null">1 h</div>
+          </label>
+        </div>
+      </form>
+    </div>
+
+    <script>
+      mapboxgl.accessToken = 'pk.eyJ1IjoiYnVkb3RvIiwiYSI6ImNtMDI4YnByNjFuNjYyanNmdXMzNHVvdnkifQ.FzJuyAndS1cOfzz3vLxv4w';
+
+      const initialLon = 132.703414;
+      const initialLat = 33.828943;
+      let profile = 'driving';
+      let minutes = 30;
+      let lngLat = { lon: initialLon, lat: initialLat }; // initial coordinates
+
+      const map = new mapboxgl.Map({
+        container: 'map',
+        style: 'mapbox://styles/mapbox/streets-v12',
+        center: [lngLat.lon, lngLat.lat], // updated starting position [lng, lat]
+        zoom: 11.5
+      });
+
+      // Initialize draggable marker
+      const originA = new mapboxgl.Marker({
+        draggable: true
+      })
+        .setLngLat([lngLat.lon, lngLat.lat])
+        .addTo(map);
+
+      // When the marker is moved, refresh the isochrones
+      function onDragEndA() {
+        const newLngLat = originA.getLngLat();
+        lngLat = { lon: newLngLat.lng, lat: newLngLat.lat };
+        getIso([lngLat.lon, lngLat.lat]);
+      }
+
+      originA.on("dragend", onDragEndA);
+
+      // ゴルフ場のデータ
+      const golfCourses = [
+        { name: 'チサンカントリークラブ北条', coords: [132.828643, 33.993934] },
+        { name: '松山国際ゴルフ倶楽部', coords: [132.862267, 33.761086] },
+        { name: '松山ロイヤルゴルフ倶楽部', coords: [132.768954, 33.692731] },
+        { name: '松山シーサイドカントリークラブ', coords: [132.824582, 34.014790] },
+        { name: 'タカガワ新伊予ゴルフ倶楽部', coords: [133.400251, 33.970971] },
+        { name: '北条カントリー倶楽部', coords: [132.824477, 33.966518] },
+        { name: '道後ゴルフ倶楽部', coords: [132.786384, 33.875593] },
+        { name: '久万カントリークラブ', coords: [132.886831, 33.687439] },
+        { name: '松山ゴルフ倶楽部', coords: [132.929933, 33.803745] },
+        { name: 'エリエールゴルフクラブ松山', coords: [132.814839, 33.921854] },
+        { name: '高原ゴルフ倶楽部', coords: [132.944343, 33.669462] },
+        { name: '大洲ゴルフ倶楽部', coords: [132.545094, 33.476941] },
+        { name: '奥道後ゴルフクラブ', coords: [132.797897, 33.958388] },
+        { name: '西条ゴルフ倶楽部', coords: [133.185979, 33.889449] },
+        { name: '宇和島カントリー倶楽部', coords: [132.580563, 33.305372] }
+      ];
+
+      // 観光地のデータ
+      const touristSpots = [
+        { name: '松山城', coords: [132.765471, 33.845739] },
+        { name: '道後温泉本館', coords: [132.786402, 33.852173] },
+        { name: '伊佐爾波神社', coords: [132.788964, 33.850776] },
+        { name: '石手寺', coords: [132.796474, 33.847916] },
+        { name: 'とべ動物園', coords: [132.791972, 33.764260] }
+      ];
+
+      // ゴルフ場のマーカーとラベルを追加
+      golfCourses.forEach(course => {
+        const el = document.createElement('div');
+        el.className = 'marker';
+        el.style.backgroundColor = 'green';
+        el.style.width = '10px';
+        el.style.height = '10px';
+        el.style.borderRadius = '50%';
+
+        new mapboxgl.Marker(el)
+          .setLngLat(course.coords)
+          .setPopup(new mapboxgl.Popup({ offset: 25 }).setText(course.name))
+          .addTo(map);
+
+        // ラベルを追加
+        const label = document.createElement('div');
+        label.className = 'label';
+        label.textContent = course.name;
+
+        new mapboxgl.Marker({
+          element: label,
+          anchor: 'left'
+        })
+          .setLngLat(course.coords)
+          .setOffset([15, 0])
+          .addTo(map);
+      });
+
+      // 観光地のマーカーとラベルを追加
+      touristSpots.forEach(spot => {
+        const el = document.createElement('div');
+        el.className = 'marker';
+        el.style.backgroundColor = 'red';
+        el.style.width = '10px';
+        el.style.height = '10px';
+        el.style.borderRadius = '50%';
+
+        new mapboxgl.Marker(el)
+          .setLngLat(spot.coords)
+          .setPopup(new mapboxgl.Popup({ offset: 25 }).setText(spot.name))
+          .addTo(map);
+
+        // ラベルを追加
+        const label = document.createElement('div');
+        label.className = 'label';
+        label.textContent = spot.name;
+
+        new mapboxgl.Marker({
+          element: label,
+          anchor: 'left'
+        })
+          .setLngLat(spot.coords)
+          .setOffset([15, 0])
+          .addTo(map);
+      });
+
+      async function getIso(lngLat) {
+        try {
+          const query = await fetch(
+            `https://api.mapbox.com/isochrone/v1/mapbox/${profile}/${lngLat[0]},${lngLat[1]}?contours_minutes=${minutes}&polygons=true&access_token=${mapboxgl.accessToken}`,
+            { method: 'GET' }
+          );
+          if (!query.ok) {
+            throw new Error(`API request failed with status ${query.status}`);
+          }
+          const data = await query.json();
+          map.getSource('iso').setData(data);
+        } catch (error) {
+          console.error('Error fetching Isochrone data:', error);
+          alert('Isochrone data could not be retrieved. Please check the console for details.');
+        }
+      }
+
+      params.addEventListener('change', (event) => {
+        if (event.target.name === 'profile') {
+          profile = event.target.value;
+        } else if (event.target.name === 'duration') {
+          minutes = parseInt(event.target.value, 10);
+        }
+        getIso([lngLat.lon, lngLat.lat]);
+      });
+
+      map.on('load', () => {
+        map.addSource('iso', {
+          type: 'geojson',
+          data: {
+            'type': 'FeatureCollection',
+            'features': []
+          }
+        });
+
+        map.addLayer({
+          'id': 'isoLayer',
+          'type': 'fill',
+          'source': 'iso',
+          'layout': {},
+          'paint': {
+            'fill-color': '#5a3fc0',
+            'fill-opacity': 0.3
+          }
+        });
+
+        getIso([lngLat.lon, lngLat.lat]); // Initial Isochrone display
+      });
+
+      // Reset to initial position
+      document.getElementById('reset-button').addEventListener('click', () => {
+        lngLat = { lon: initialLon, lat: initialLat };
+        originA.setLngLat([lngLat.lon, lngLat.lat]).addTo(map);
+        getIso([lngLat.lon, lngLat.lat]);
+      });
+    </script>
+  </body>
+</html>
